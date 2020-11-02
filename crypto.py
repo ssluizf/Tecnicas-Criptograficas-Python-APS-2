@@ -80,11 +80,27 @@ def addRoundKey(group, key):
       matrix_key.append(int(matrix[i], base=16) ^ key[i])
       
     matrix_group.append(matrix_key)
-
+    
   return matrix_group
 
-def substituteBytes():
-  pass
+def substituteBytes(matrix_group, inv=False):
+  matrix_sub_bytes = []
+
+  for matrix in matrix_group:
+    matrix_sub = []
+
+    for desc in matrix:
+      if inv:
+        value = InvSbox[desc]
+      else:
+        value = Sbox[desc]
+        
+      matrix_sub.append(value)
+
+    matrix_sub_bytes.append(matrix_sub)
+
+  return matrix_sub_bytes
+
 
 def shiftRows():
   pass
@@ -100,3 +116,5 @@ def decrypt():
 
 matrix_group = textToMatrix(message)
 matrix_group_key = addRoundKey(matrix_group, round_key)
+matrix_substitute_byte = substituteBytes(matrix_group_key)
+matrix_substitute_byte_inv = substituteBytes(matrix_substitute_byte, True)
