@@ -102,8 +102,22 @@ def substituteBytes(matrix_group, inv=False):
   return matrix_sub_bytes
 
 
-def shiftRows():
-  pass
+def shiftRows(group):
+  matrix_shifted = []
+
+  for matrix in group:
+    matrix_shift = []
+
+    for i, row in enumerate([matrix[0:4], matrix[4:8], matrix[8:12], matrix[12:16]]):
+      n = len(row)
+      i %= n
+      row[:] = row[i:] + row[:i-n]
+      matrix_shift.append(row)
+
+    flatten = lambda t: [item for sublist in t for item in sublist]
+    matrix_shifted.append(flatten(matrix_shift))
+
+  return matrix_shifted
 
 def mixColumns():
   pass
@@ -118,3 +132,4 @@ matrix_group = textToMatrix(message)
 matrix_group_key = addRoundKey(matrix_group, round_key)
 matrix_substitute_byte = substituteBytes(matrix_group_key)
 matrix_substitute_byte_inv = substituteBytes(matrix_substitute_byte, True)
+matrix_shift_rows = shiftRows(matrix_substitute_byte_inv)
