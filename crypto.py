@@ -38,8 +38,6 @@ InvSbox = (
     0x17, 0x2B, 0x04, 0x7E, 0xBA, 0x77, 0xD6, 0x26, 0xE1, 0x69, 0x14, 0x63, 0x55, 0x21, 0x0C, 0x7D,
 )
 
-message = 'Man request adapted spirits set pressed. Up to denoting subjects sensible feelings it indulged directly.'
-
 round_key = (
   0x63, 0xa4, 0x12, 0x14,
   0x41, 0xf3, 0x27, 0x12,
@@ -65,19 +63,28 @@ def textToMatrix(text):
     
     for i in range(16):
       hex_char = hex_piece[2 * i: 2 * (i + 1)]
-      matrix.append(hex_char or '00')
+      matrix.append(int((hex_char or '00') , base=16))
 
     matrix_counter += 1
     matrix_group.append(matrix)
 
   return matrix_group
 
+def matrixToText(group):
+  string = ''
+
+  for matrix in group:
+    for dec in matrix:
+      string += chr(dec)
+
+  return string
+
 def addRoundKey(group, key):
   matrix_group = []
   for matrix in group:
     matrix_key = []
     for i in range(16):
-      matrix_key.append(int(matrix[i], base=16) ^ key[i])
+      matrix_key.append(matrix[i] ^ key[i])
       
     matrix_group.append(matrix_key)
     
@@ -119,17 +126,57 @@ def shiftRows(group):
 
   return matrix_shifted
 
-def mixColumns():
-  pass
+def gMul(a, b):
+  p = 0
+
+  for i in range(8):
+    if (b & 1) != 0:
+      p ^= a
+    carry = (a & 0x80) != 0
+    a <<= 1
+    if carry:
+      a ^= 0x11B
+    b >>= 1
+
+  return p
+
+def mixColumns(group):
+  matrix_mixed = []
+
+  for matrix in group:
+    matrix_copy = matrix.copy()
+
+    for c in range(4):
+      matrix_copy[0+c*4] = gMul(0x02, matrix[0+c*4]) ^ gMul(0x03, matrix[1+c*4]) ^ matrix[2+c*4] ^ matrix[3+c*4]
+      matrix_copy[1+c*4] = matrix[0+c*4] ^ gMul(0x02, matrix[1+c*4]) ^ gMul(0x03, matrix[2+c*4]) ^ matrix[3+c*4]
+      matrix_copy[2+c*4] = matrix[0+c*4] ^ matrix[1+c*4] ^ gMul(0x02, matrix[2+c*4]) ^ gMul(0x03, matrix[3+c*4])
+      matrix_copy[3+c*4] = gMul(0x03, matrix[0+c*4]) ^ matrix[1+c*4] ^ matrix[2+c*4] ^ gMul(0x02, matrix[3+c*4])
+    
+    matrix_mixed.append(matrix_copy)
+
+  return matrix_mixed
 
 def crypt():
-  pass
+  message = str(open('Message.txt', 'r'))
+
+  matrix_group = textToMatrix(message)
+  matrix_group_key = addRoundKey(matrix_group, round_key)
+
+  for _ in range(9):
+    matrix_substitute_byte = substituteBytes(matrix_group_key)
+    matrix_shift_rows = shiftRows(matrix_substitute_byte)
+    matrix_mixed = mixColumns(matrix_shift_rows)
+    matrix_group_key = addRoundKey(matrix_mixed, round_key)
+
+  
+  matrix_substitute_byte = substituteBytes(matrix_group_key)
+  matrix_end = shiftRows(matrix_substitute_byte)
+  encrypted_message = open('Encrypted Message.txt','w', encoding="utf-8")
+  encrypted_message.writelines(matrixToText(matrix_end))
+
+  return matrix_end
 
 def decrypt():
   pass
 
-matrix_group = textToMatrix(message)
-matrix_group_key = addRoundKey(matrix_group, round_key)
-matrix_substitute_byte = substituteBytes(matrix_group_key)
-matrix_substitute_byte_inv = substituteBytes(matrix_substitute_byte, True)
-matrix_shift_rows = shiftRows(matrix_substitute_byte_inv)
+crypt()
