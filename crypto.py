@@ -45,15 +45,18 @@ round_key = (
   0xE6, 0x42, 0x68, 0x41,
 )
 
-def textToMatrix(text):
+def textToMatrix(text, isHexText=False):
   matrix_group = [] 
   matrix_counter = 0
-  hex_text = (text.encode(encoding="utf-8")).hex()
+  hex_text = text
   hex_start = 0
   hex_end = 0
 
-  if len(text) > 128:
-    raise Exception('Message range exceed the 128 char limit')
+  if isHexText == False:
+    hex_text = (text.encode(encoding="utf8")).hex()
+    
+    if len(text) > 128:
+      raise Exception('Message range exceed the 128 char limit')
 
   while hex_end < len(hex_text):
     matrix = []
@@ -70,12 +73,16 @@ def textToMatrix(text):
 
   return matrix_group
 
-def matrixToText(group):
+def matrixToText(group, toUtf=False):
   string = ''
 
   for matrix in group:
     for dec in matrix:
-      string += chr(dec)
+      if toUtf:
+        if dec != 0:
+          string += bytes.fromhex('{:02X}'.format(dec)).decode('utf-8')
+      else:
+        string += '{:02X}'.format(dec)
 
   return string
 
@@ -90,10 +97,10 @@ def addRoundKey(group, key):
     
   return matrix_group
 
-def substituteBytes(matrix_group, inv=False):
+def substituteBytes(group, inv=False):
   matrix_sub_bytes = []
 
-  for matrix in matrix_group:
+  for matrix in group:
     matrix_sub = []
 
     for desc in matrix:
@@ -108,8 +115,7 @@ def substituteBytes(matrix_group, inv=False):
 
   return matrix_sub_bytes
 
-
-def shiftRows(group):
+def shiftRows(group, inv=False):
   matrix_shifted = []
 
   for matrix in group:
@@ -117,8 +123,12 @@ def shiftRows(group):
 
     for i, row in enumerate([matrix[0:4], matrix[4:8], matrix[8:12], matrix[12:16]]):
       n = len(row)
-      i %= n
-      row[:] = row[i:] + row[:i-n]
+
+      if inv:
+        row[:] = row[n-i:] + row[:n-i]
+      else:
+        row[:] = row[i:] + row[:i-n]
+
       matrix_shift.append(row)
 
     flatten = lambda t: [item for sublist in t for item in sublist]
@@ -140,43 +150,68 @@ def gMul(a, b):
 
   return p
 
-def mixColumns(group):
+def mixColumns(group, inv=False):
   matrix_mixed = []
 
   for matrix in group:
     matrix_copy = matrix.copy()
 
     for c in range(4):
-      matrix_copy[0+c*4] = gMul(0x02, matrix[0+c*4]) ^ gMul(0x03, matrix[1+c*4]) ^ matrix[2+c*4] ^ matrix[3+c*4]
-      matrix_copy[1+c*4] = matrix[0+c*4] ^ gMul(0x02, matrix[1+c*4]) ^ gMul(0x03, matrix[2+c*4]) ^ matrix[3+c*4]
-      matrix_copy[2+c*4] = matrix[0+c*4] ^ matrix[1+c*4] ^ gMul(0x02, matrix[2+c*4]) ^ gMul(0x03, matrix[3+c*4])
-      matrix_copy[3+c*4] = gMul(0x03, matrix[0+c*4]) ^ matrix[1+c*4] ^ matrix[2+c*4] ^ gMul(0x02, matrix[3+c*4])
+      if inv:
+        matrix_copy[0+c*4] = gMul(0xe, matrix[0+c*4]) ^ gMul(0xb, matrix[1+c*4]) ^ gMul(0xd, matrix[2+c*4]) ^ gMul(0x09, matrix[3+c*4])
+        matrix_copy[1+c*4] = gMul(0x09, matrix[0+c*4]) ^ gMul(0xe, matrix[1+c*4]) ^ gMul(0xb, matrix[2+c*4]) ^ gMul(0xd, matrix[3+c*4])
+        matrix_copy[2+c*4] = gMul(0xd, matrix[0+c*4]) ^ gMul(0x09, matrix[1+c*4]) ^ gMul(0xe, matrix[2+c*4]) ^ gMul(0xb, matrix[3+c*4])
+        matrix_copy[3+c*4] = gMul(0xb, matrix[0+c*4]) ^ gMul(0xd, matrix[1+c*4]) ^ gMul(0x09, matrix[2+c*4]) ^ gMul(0xe, matrix[3+c*4])
+      else:
+        matrix_copy[0+c*4] = gMul(0x02, matrix[0+c*4]) ^ gMul(0x03, matrix[1+c*4]) ^ matrix[2+c*4] ^ matrix[3+c*4]
+        matrix_copy[1+c*4] = matrix[0+c*4] ^ gMul(0x02, matrix[1+c*4]) ^ gMul(0x03, matrix[2+c*4]) ^ matrix[3+c*4]
+        matrix_copy[2+c*4] = matrix[0+c*4] ^ matrix[1+c*4] ^ gMul(0x02, matrix[2+c*4]) ^ gMul(0x03, matrix[3+c*4])
+        matrix_copy[3+c*4] = gMul(0x03, matrix[0+c*4]) ^ matrix[1+c*4] ^ matrix[2+c*4] ^ gMul(0x02, matrix[3+c*4])
     
     matrix_mixed.append(matrix_copy)
 
   return matrix_mixed
 
 def crypt():
-  message = str(open('Message.txt', 'r'))
+  message = open('Message.txt', 'r').read()
 
-  matrix_group = textToMatrix(message)
-  matrix_group_key = addRoundKey(matrix_group, round_key)
+  matrix = textToMatrix(message)
+  matrix_key = addRoundKey(matrix, round_key)
 
   for _ in range(9):
-    matrix_substitute_byte = substituteBytes(matrix_group_key)
-    matrix_shift_rows = shiftRows(matrix_substitute_byte)
+    matrix_substitute_bytes = substituteBytes(matrix_key)
+    matrix_shift_rows = shiftRows(matrix_substitute_bytes)
     matrix_mixed = mixColumns(matrix_shift_rows)
-    matrix_group_key = addRoundKey(matrix_mixed, round_key)
-
+    matrix_key = addRoundKey(matrix_mixed, round_key)
   
-  matrix_substitute_byte = substituteBytes(matrix_group_key)
-  matrix_end = shiftRows(matrix_substitute_byte)
-  encrypted_message = open('Encrypted Message.txt','w', encoding="utf-8")
-  encrypted_message.writelines(matrixToText(matrix_end))
-
-  return matrix_end
+  # print('c', matrix_substitute_bytes)
+  matrix_substitute_bytes = substituteBytes(matrix_key)
+  matrix_shift_rows = shiftRows(matrix_substitute_bytes)
+  matrix_end = addRoundKey(matrix_shift_rows, round_key)
+  encrypted_message = open('Encrypted Message.txt','w')
+  encrypted_message.write(matrixToText(matrix_end))
 
 def decrypt():
-  pass
+  message_crypt = open('Encrypted Message.txt', 'r').read()
+
+  matrix = textToMatrix(message_crypt, True)
+  matrix_key = addRoundKey(matrix, round_key)
+  matrix_shift_rows = shiftRows(matrix_key, True)
+  matrix_substitute_bytes = substituteBytes(matrix_shift_rows, True)
+  matrix_key = addRoundKey(matrix_substitute_bytes, round_key)
+  matrix_mixed = mixColumns(matrix_key, True)
+
+  for _ in range(8):
+    matrix_shift_rows = shiftRows(matrix_mixed, True)
+    matrix_substitute_bytes = substituteBytes(matrix_shift_rows, True)
+    matrix_key = addRoundKey(matrix_substitute_bytes, round_key)
+    matrix_mixed = mixColumns(matrix_key, True)
+
+  matrix_shift_rows = shiftRows(matrix_mixed, True)
+  matrix_substitute_bytes = substituteBytes(matrix_shift_rows, True)
+  matrix_end = addRoundKey(matrix_substitute_bytes, round_key)
+  decrypted_message = open('Decrypted Message.txt', 'w')
+  decrypted_message.write(matrixToText(matrix_end, True))
 
 crypt()
+decrypt()
