@@ -55,18 +55,34 @@ round_num = 0
 def screen():
   global mode
   global round_num
+  program = True
 
-  print('Técnicas Criptográficas Python - AES', end='\n\n')
-  print('Iniciar em modo de criptografia ou descriptografia: ', end='\n\n')
-  mode = int(input('Precione [0] para criptografia [1] para descriptografia... '))
+  print('----------------------------------------')
+  print('| Técnicas Criptográficas Python - AES |')
+  print('----------------------------------------', end='\n\n')
 
-  if mode:
-    round_num = 10
-    decrypt()
-    print('Mensagem foi decriptada com sucesso! Arquivo criado...')
-  else:
-    crypt()
-    print('Mensagem foi criptada com sucesso! Arquivo criado...')
+  while (program):
+    print('Deseja criar uma nova mensagem?')
+    create_message = str(input('Pressione [s] para confirmar: ')).rstrip().upper()
+    if (create_message == 'S'):
+      message = str(input('\nCrie uma mensagem: '))
+      createMessage(message)
+      print('Mensagem foi criada com sucesso! Arquivo criado...')
+
+    print('\nIniciar em modo de criptografia ou descriptografia:')
+    mode = int(input('Pressione [0] para criptografia e [1] para descriptografia... '))
+
+    if mode:
+      round_num = 10
+      decrypt()
+      print('\nMensagem foi decriptada com sucesso! Arquivo criado...', end='\n\n')
+    else:
+      crypt()
+      print('\nMensagem foi criptada com sucesso! Arquivo criado...', end='\n\n')
+    
+    print('Deseja parar a execução do programa?')
+    program = str(input('Pressione [s] para finalizar: ')).rstrip().upper() != 'S'
+    print('\n----------------------------------------', end='\n\n')
 
 def keySchedule(matrix):
   global round_num
@@ -122,9 +138,6 @@ def textToMatrix(text, isHexText=False):
 
   if isHexText == False:
     hex_text = (text.encode(encoding="utf8")).hex()
-    
-    if len(text) > 128:
-      raise Exception('Message range exceed the 128 char limit')
 
   while hex_end < len(hex_text):
     matrix = []
@@ -241,6 +254,13 @@ def mixColumns(group, inv=False):
     matrix_mixed.append(matrix_copy)
 
   return matrix_mixed
+
+def createMessage(text):
+  if len(text) > 128:
+    raise Exception('Message range exceed the 128 char limit')
+
+  message = open('Message.txt','w')
+  message.write(text)
 
 def crypt():
   message = open('Message.txt', 'r').read()
