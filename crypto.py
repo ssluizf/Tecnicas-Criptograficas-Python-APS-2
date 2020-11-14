@@ -38,12 +38,80 @@ InvSbox = (
     0x17, 0x2B, 0x04, 0x7E, 0xBA, 0x77, 0xD6, 0x26, 0xE1, 0x69, 0x14, 0x63, 0x55, 0x21, 0x0C, 0x7D,
 )
 
-round_key = (
+Rcon = (
+  0x01,	0x02,	0x04,	0x08, 0x10,	0x20,	0x40,	0x80,	0x1B,	0x36,
+)
+
+round_key = [
   0x63, 0xa4, 0x12, 0x14,
   0x41, 0xf3, 0x27, 0x12,
   0x8C, 0xA1, 0x89, 0x0D,
   0xE6, 0x42, 0x68, 0x41,
-)
+]
+
+mode = 0
+round_num = 0
+
+def screen():
+  global mode
+  global round_num
+
+  print('Técnicas Criptográficas Python - AES', end='\n\n')
+  print('Iniciar em modo de criptografia ou descriptografia: ', end='\n\n')
+  mode = int(input('Precione [0] para criptografia [1] para descriptografia... '))
+
+  if mode:
+    round_num = 10
+    decrypt()
+    print('Mensagem foi decriptada com sucesso! Arquivo criado...')
+  else:
+    crypt()
+    print('Mensagem foi criptada com sucesso! Arquivo criado...')
+
+def keySchedule(matrix):
+  global round_num
+  matrix_copy = matrix.copy()
+
+  for r in range(round_num):
+    matrix_rounded = [0] * len(matrix)
+
+    for i in range(4):
+      col = [matrix_copy[(4*x)+i] for x in range(4)]
+      col_group = []
+
+      if (i == 0):
+        first_col = [matrix_copy[4*(x+1)-1] for x in range(4)]
+        first_col = [first_col[1], first_col[2], first_col[3], first_col[0]]
+        col_group = substituteBytes([first_col])
+        col_group.append([Rcon[r], 0x00, 0x00, 0x00])
+      else:
+        col_group.append([matrix_rounded[(i-1)+(x*4)] for x in range(4)])
+
+      col_group.append(col)
+      col = xor(col_group)
+
+      for x in range(4):
+        matrix_rounded[x*4+i] = col[x]  
+
+    matrix_copy = matrix_rounded
+
+  if mode:
+    round_num -= 1
+  else:
+    round_num += 1
+  
+  return matrix_copy
+
+def xor(group):
+  col_prod = [0] * len(group[-1])
+
+  for col in group:
+    col_prod[0] ^= col[0]  
+    col_prod[1] ^= col[1]  
+    col_prod[2] ^= col[2]  
+    col_prod[3] ^= col[3]
+
+  return col_prod  
 
 def textToMatrix(text, isHexText=False):
   matrix_group = [] 
@@ -88,10 +156,12 @@ def matrixToText(group, toUtf=False):
 
 def addRoundKey(group, key):
   matrix_group = []
+  new_key = keySchedule(key)
+
   for matrix in group:
     matrix_key = []
     for i in range(16):
-      matrix_key.append(matrix[i] ^ key[i])
+      matrix_key.append(matrix[i] ^ new_key[i])
       
     matrix_group.append(matrix_key)
     
@@ -184,7 +254,6 @@ def crypt():
     matrix_mixed = mixColumns(matrix_shift_rows)
     matrix_key = addRoundKey(matrix_mixed, round_key)
   
-  # print('c', matrix_substitute_bytes)
   matrix_substitute_bytes = substituteBytes(matrix_key)
   matrix_shift_rows = shiftRows(matrix_substitute_bytes)
   matrix_end = addRoundKey(matrix_shift_rows, round_key)
@@ -213,5 +282,4 @@ def decrypt():
   decrypted_message = open('Decrypted Message.txt', 'w')
   decrypted_message.write(matrixToText(matrix_end, True))
 
-crypt()
-decrypt()
+screen()
